@@ -8,29 +8,32 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+
+	"github.com/mribichich/release-mgmt/entities"
+	"github.com/mribichich/release-mgmt/repositories"
 )
 
 func Index(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "Welcome!")
 }
 
-func TodoIndex(w http.ResponseWriter, r *http.Request) {
+func ReleaseIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
-	todos := FindAll()
-	if err := json.NewEncoder(w).Encode(todos); err != nil {
+	releases := repositories.FindAll()
+	if err := json.NewEncoder(w).Encode(releases); err != nil {
 		panic(err)
 	}
 }
 
-func TodoShow(w http.ResponseWriter, r *http.Request) {
+func ReleaseShow(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	todoId := vars["todoId"]
-	fmt.Fprintln(w, "Todo show:", todoId)
+	releaseId := vars["id"]
+	fmt.Fprintln(w, "Release show: ", releaseId)
 }
 
-func TodoCreate(w http.ResponseWriter, r *http.Request) {
-	var todo Todo
+func ReleaseCreate(w http.ResponseWriter, r *http.Request) {
+	var release entities.Release
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
 		panic(err)
@@ -38,7 +41,7 @@ func TodoCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.Body.Close(); err != nil {
 		panic(err)
 	}
-	if err := json.Unmarshal(body, &todo); err != nil {
+	if err := json.Unmarshal(body, &release); err != nil {
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(422) // unprocessable entity
 		if err := json.NewEncoder(w).Encode(err); err != nil {
@@ -46,7 +49,8 @@ func TodoCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	t := RepoCreateTodo(todo)
+	t := repositories.RepoCreateRelease(release)
+	
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(t); err != nil {
