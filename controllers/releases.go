@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
@@ -12,120 +13,249 @@ import (
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/mribichich/release-mgmt/entities"
+	"github.com/mribichich/release-mgmt/models"
 )
 
 type (
 	// ReleasesController represents the controller for operating on the Release resource
 	ReleasesController struct {
 		session *mgo.Session
+		// releasesCollection     *mgo.Collection
+		applicationsCollection *mgo.Collection
 	}
 )
 
 // NewReleasesController provides a reference to a ReleasesController with provided mongo session
 func NewReleasesController(s *mgo.Session) *ReleasesController {
-	return &ReleasesController{s}
+	// releasesCollection := s.DB("test").C("releases")
+	applicationsCollection := s.DB("test").C("applications")
+	return &ReleasesController{s, applicationsCollection}
 }
 
-// GetRelease retrieves an individual release resource
-func (uc ReleasesController) GetAll(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Stub release
-	result := entities.Releases{}
+// GetAll retrieves an individual release resource
+func (ctrl ReleasesController) GetAll(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationName := p.ByName("name")
+	applicationName = strings.ToLower(applicationName)
 
-	// Fetch release
-	if err := uc.session.DB("test").C("releases").Find(bson.M{}).All(&result); err != nil {
-		w.WriteHeader(500)
+	var application entities.Application
+
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationName), "i"}}
+	err := ctrl.applicationsCollection.Find(query).One(&application)
+
+	if err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
 		return
 	}
 
-	// Marshal provided interface into JSON structure
-	uj, _ := json.Marshal(result)
+	// uj, _ := json.Marshal(application.Releases)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	// fmt.Fprintf(w, "%s", uj)
+	json.NewEncoder(w).Encode(application.Releases)
+}
 
-	// Write content-type, statuscode, payload
+// Get retrieves an individual release resource
+func (ctrl ReleasesController) Get(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationName := p.ByName("name")
+	releaseVersion := p.ByName("version")
+
+	applicationName = strings.ToLower(applicationName)
+
+	var application entities.Application
+
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationName), "i"}}
+	err := ctrl.applicationsCollection.Find(query).One(&application)
+
+	if err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
+		return
+	}
+
+	var release entities.Release
+
+	for _, rel := range application.Releases {
+		if rel.Version == releaseVersion {
+			release = rel
+			break
+		}
+	}
+
+	if release == (entities.Release{}) {
+		w.WriteHeader(404)
+		fmt.Fprintf(w, "%s", "error: release not found")
+		return
+	}
+
+	uj, _ := json.Marshal(release)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 	fmt.Fprintf(w, "%s", uj)
 }
 
-// GetRelease retrieves an individual release resource
-func (uc ReleasesController) Get(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Grab id
-	id := p.ByName("id")
+// Create creates a new release resource
+func (ctrl ReleasesController) Create(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationName := p.ByName("name")
+	applicationName = strings.ToLower(applicationName)
 
-	// Verify id is ObjectId, otherwise bail
-	if !bson.IsObjectIdHex(id) {
-		w.WriteHeader(404)
+	var application entities.Application
+
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationName), "i"}}
+	err := ctrl.applicationsCollection.Find(query).One(&application)
+
+	if err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
 		return
 	}
 
-	// Grab id
-	oid := bson.ObjectIdHex(id)
+	releasePost := models.ReleasePost{}
 
-	// Stub release
-	u := entities.Release{}
+	json.NewDecoder(r.Body).Decode(&releasePost)
 
-	// Fetch release
-	if err := uc.session.DB("test").C("releases").FindId(oid).One(&u); err != nil {
-		w.WriteHeader(404)
-		return
-	}
+	newRelease := entities.Release{}
+	newRelease.Id = bson.NewObjectId()
+	newRelease.Timestamp = time.Now()
+	newRelease.Version = releasePost.Version
 
-	// Marshal provided interface into JSON structure
-	uj, _ := json.Marshal(u)
+	application.Releases = append(application.Releases, newRelease)
 
-	// Write content-type, statuscode, payload
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	fmt.Fprintf(w, "%s", uj)
-}
-
-// CreateRelease creates a new release resource
-func (uc ReleasesController) Create(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Stub an release to be populated from the body
-	result := entities.Release{}
-
-	// Populate the release data
-	json.NewDecoder(r.Body).Decode(&result)
-
-	// Add an Id
-	result.Id = bson.NewObjectId()
-	result.Timestamp = time.Now()
-
-	// Write the release to mongo
-	err := uc.session.DB("test").C("releases").Insert(result)
+	err = ctrl.applicationsCollection.UpdateId(application.Id, application)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Marshal provided interface into JSON structure
-	uj, _ := json.Marshal(result)
-
-	// Write content-type, statuscode, payload
-	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
-	fmt.Fprintf(w, "%s", uj)
 }
 
-// RemoveRelease removes an existing release resource
-func (uc ReleasesController) Delete(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Grab id
-	id := p.ByName("id")
+// Update a release resource
+func (ctrl ReleasesController) Update(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationName := p.ByName("name")
+	releaseVersion := p.ByName("version")
 
-	// Verify id is ObjectId, otherwise bail
-	if !bson.IsObjectIdHex(id) {
-		w.WriteHeader(404)
+	applicationName = strings.ToLower(applicationName)
+
+	var application entities.Application
+
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationName), "i"}}
+	err := ctrl.applicationsCollection.Find(query).One(&application)
+
+	if err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
 		return
 	}
 
-	// Grab id
-	oid := bson.ObjectIdHex(id)
+	var release entities.Release
+	var releaseIndex int
 
-	// Remove release
-	if err := uc.session.DB("test").C("releases").RemoveId(oid); err != nil {
+	for i, rel := range application.Releases {
+		if rel.Version == releaseVersion {
+			release = rel
+			releaseIndex = i
+			break
+		}
+	}
+
+	if release == (entities.Release{}) {
 		w.WriteHeader(404)
+		fmt.Fprintf(w, "%s", "error: release not found")
 		return
 	}
 
-	// Write status
+	releasePost := models.ReleasePost{}
+
+	json.NewDecoder(r.Body).Decode(&releasePost)
+
+	release.Version = releasePost.Version
+
+	application.Releases[releaseIndex] = release
+
+	err = ctrl.applicationsCollection.UpdateId(application.Id, application)
+
+	if err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	json.NewEncoder(w).Encode(release)
+}
+
+// Delete removes an existing release resource
+func (ctrl ReleasesController) Delete(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationName := p.ByName("name")
+	releaseVersion := p.ByName("version")
+
+	applicationName = strings.ToLower(applicationName)
+
+	var application entities.Application
+
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationName), "i"}}
+
+	if err := ctrl.applicationsCollection.Find(query).One(&application); err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
+		return
+	}
+
+	var found bool
+
+	for _, rel := range application.Releases {
+		if rel.Version == releaseVersion {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		w.WriteHeader(404)
+		fmt.Fprintf(w, "%s", "error: release not found")
+		return
+	}
+
+	query = bson.M{"$pull": bson.M{"releases": bson.M{"version": releaseVersion}}}
+
+	if err := ctrl.applicationsCollection.UpdateId(application.Id, query); err != nil {
+		w.WriteHeader(500)
+		fmt.Fprintf(w, "%s", err.Error())
+		return
+	}
+
 	w.WriteHeader(200)
 }

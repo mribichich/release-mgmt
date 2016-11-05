@@ -7,6 +7,7 @@ import (
 	mgo "gopkg.in/mgo.v2"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/rs/cors"
 
 	"github.com/mribichich/release-mgmt/controllers"
 )
@@ -25,16 +26,19 @@ func main() {
 	rc := controllers.NewReleasesController(session)
 
 	r.GET("/applications", ac.GetAll)
-	r.GET("/applications/:id", ac.Get)
+	r.GET("/applications/:name", ac.Get)
 	r.POST("/applications", ac.Create)
-	r.DELETE("/applications/:id", ac.Delete)
+	r.PUT("/applications/:name", ac.Update)
+	r.DELETE("/applications/:name", ac.Delete)
 
-	r.GET("/releases", rc.GetAll)
-	r.GET("/releases/:id", rc.Get)
-	r.POST("/releases", rc.Create)
-	r.DELETE("/releases/:id", rc.Delete)
+	r.GET("/applications/:name/releases", rc.GetAll)
+	r.GET("/applications/:name/releases/:version", rc.Get)
+	r.POST("/applications/:name/releases", rc.Create)
+	r.PUT("/applications/:name/releases/:version", rc.Update)
+	r.DELETE("/applications/:name/releases/:version", rc.Delete)
 
-	log.Fatal(http.ListenAndServe(url, r))
+	handler := cors.Default().Handler(r)
+	log.Fatal(http.ListenAndServe(url, handler))
 }
 
 // getSession creates a new mongo session and panics if connection error occurs

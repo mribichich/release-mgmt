@@ -1,27 +1,39 @@
 package repositories
 
-// import (
-// 	"log"
-// 	"time"
+import (
+	"log"
 
-// 	"gopkg.in/mgo.v2"
-// 	"gopkg.in/mgo.v2/bson"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 
-// 	"github.com/mribichich/release-mgmt/entities"
-// )
+	"github.com/mribichich/release-mgmt/entities"
+)
 
-// type (
-// 	ApplicationsRepository struct {
-// 		 session *mgo.Session
-// 	}
-// )
+type (
+	ApplicationsRepository struct {
+		session *mgo.Session
+	}
+)
 
 // var session mgo.Session
-// var applicationsCollection *mgo.Collection
+var applicationsCollection *mgo.Collection
 
-// func NewApplicationsRepository(s *mgo.Session) *ApplicationsRepository {
-// 	return &ApplicationsRepository{s}
-// }
+func NewApplicationsRepository(s *mgo.Session) *ApplicationsRepository {
+	applicationsCollection = s.DB("test").C("applications")
+	return &ApplicationsRepository{s}
+}
+
+func (repo ApplicationsRepository) FindOneById(id bson.ObjectId) entities.Application {
+	var result entities.Application
+
+	err := applicationsCollection.FindId(id).One(&result)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return result
+}
 
 // // Give us some seed data
 // func init() {

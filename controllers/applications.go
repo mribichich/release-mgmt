@@ -5,33 +5,36 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/julienschmidt/httprouter"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/mribichich/release-mgmt/entities"
+	"github.com/mribichich/release-mgmt/models"
 )
 
 type (
 	// ApplicationsController represents the controller for operating on the Application resource
 	ApplicationsController struct {
-		session *mgo.Session
+		session                *mgo.Session
+		applicationsCollection *mgo.Collection
 	}
 )
 
 // NewApplicationsController provides a reference to a ApplicationsController with provided mongo session
 func NewApplicationsController(s *mgo.Session) *ApplicationsController {
-	return &ApplicationsController{s}
+	applicationsCollection := s.DB("test").C("applications")
+	return &ApplicationsController{s, applicationsCollection}
 }
 
-// GetApplication retrieves an individual application resource
-func (uc ApplicationsController) GetAll(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Stub application
+// GetAll retrieves an individual application resource
+func (ctrl ApplicationsController) GetAll(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	result := entities.Applications{}
 
 	// Fetch application
-	if err := uc.session.DB("test").C("applications").Find(bson.M{}).All(&result); err != nil {
+	if err := ctrl.applicationsCollection.Find(bson.M{}).All(&result); err != nil {
 		w.WriteHeader(500)
 		return
 	}
@@ -45,85 +48,124 @@ func (uc ApplicationsController) GetAll(w http.ResponseWriter, r *http.Request, 
 	fmt.Fprintf(w, "%s", uj)
 }
 
-// GetApplication retrieves an individual application resource
-func (uc ApplicationsController) Get(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Grab id
-	id := p.ByName("id")
+// Get retrieves an individual application resource
+func (ctrl ApplicationsController) Get(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationName := p.ByName("name")
+	applicationName = strings.ToLower(applicationName)
 
-	// Verify id is ObjectId, otherwise bail
-	if !bson.IsObjectIdHex(id) {
-		w.WriteHeader(404)
+	var result *entities.Application
+
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationName), "i"}}
+
+	if err := ctrl.applicationsCollection.Find(query).One(&result); err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
 		return
 	}
 
-	// Grab id
-	oid := bson.ObjectIdHex(id)
-
-	// Stub application
-	result := entities.Application{}
-
-	// Fetch application
-	if err := uc.session.DB("test").C("applications").FindId(oid).One(&result); err != nil {
-		w.WriteHeader(404)
-		return
-	}
-
-	// Marshal provided interface into JSON structure
 	uj, _ := json.Marshal(result)
 
-	// Write content-type, statuscode, payload
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 	fmt.Fprintf(w, "%s", uj)
 }
 
-// CreateApplication creates a new application resource
-func (uc ApplicationsController) Create(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Stub an application to be populated from the body
-	result := entities.Application{}
+// Create creates a new application resource
+func (ctrl ApplicationsController) Create(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationPost := models.ApplicationPost{}
 
-	// Populate the application data
-	json.NewDecoder(r.Body).Decode(&result)
+	json.NewDecoder(r.Body).Decode(&applicationPost)
 
-	// Add an Id
-	result.Id = bson.NewObjectId()
+	applicationPost.Name = strings.ToLower(applicationPost.Name)
 
-	// Write the application to mongo
-	err := uc.session.DB("test").C("applications").Insert(result)
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationPost.Name), "i"}}
+	n, err := ctrl.applicationsCollection.Find(query).Count()
+
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
+
+	if n != 0 {
+		w.WriteHeader(400)
+		errorModel := "error: application already exists"
+		// errorModelJson, _ := json.Marshal(errorModel)
+		fmt.Fprintf(w, "%s", errorModel)
+		return
+	}
+
+	newApplication := entities.Application{
+		Id:   bson.NewObjectId(),
+		Name: applicationPost.Name}
+
+	err = ctrl.applicationsCollection.Insert(newApplication)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Marshal provided interface into JSON structure
-	uj, _ := json.Marshal(result)
-
-	// Write content-type, statuscode, payload
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
-	fmt.Fprintf(w, "%s", uj)
+	json.NewEncoder(w).Encode(newApplication)
 }
 
-// RemoveApplication removes an existing application resource
-func (uc ApplicationsController) Delete(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Grab id
-	id := p.ByName("id")
+// Update an individual application resource
+func (ctrl ApplicationsController) Update(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationName := p.ByName("name")
+	applicationName = strings.ToLower(applicationName)
 
-	// Verify id is ObjectId, otherwise bail
-	if !bson.IsObjectIdHex(id) {
-		w.WriteHeader(404)
+	var application *entities.Application
+
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationName), "i"}}
+
+	if err := ctrl.applicationsCollection.Find(query).One(&application); err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
 		return
 	}
 
-	// Grab id
-	oid := bson.ObjectIdHex(id)
+	applicationPost := models.ApplicationPost{}
+	json.NewDecoder(r.Body).Decode(&applicationPost)
+	applicationPost.Name = strings.ToLower(applicationPost.Name)
 
-	// Remove application
-	if err := uc.session.DB("test").C("applications").RemoveId(oid); err != nil {
-		w.WriteHeader(404)
+	application.Name = applicationPost.Name
+
+	if err := ctrl.applicationsCollection.UpdateId(application.Id, application); err != nil {
+		log.Fatal(err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	json.NewEncoder(w).Encode(application)
+}
+
+// Delete removes an existing application resource
+func (ctrl ApplicationsController) Delete(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	applicationName := p.ByName("name")
+	applicationName = strings.ToLower(applicationName)
+
+	query := bson.M{"name": bson.RegEx{fmt.Sprintf("^%s$", applicationName), "i"}}
+
+	if err := ctrl.applicationsCollection.Remove(query); err != nil {
+		if err.Error() == "not found" {
+			w.WriteHeader(404)
+			fmt.Fprintf(w, "%s", "error: application not found")
+		} else {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "%s", err.Error())
+		}
 		return
 	}
 
-	// Write status
 	w.WriteHeader(200)
 }
