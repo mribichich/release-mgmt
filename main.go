@@ -26,18 +26,21 @@ func main() {
 	rc := controllers.NewReleasesController(session)
 
 	r.GET("/applications", ac.GetAll)
-	r.GET("/applications/:name", ac.Get)
+	r.GET("/applications/:name", ac.GetByName)
 	r.POST("/applications", ac.Create)
-	r.PUT("/applications/:name", ac.Update)
-	r.DELETE("/applications/:name", ac.Delete)
+	r.PUT("/applications/:name", ac.UpdateByName)
+	r.DELETE("/applications/:name", ac.DeleteByName)
 
 	r.GET("/applications/:name/releases", rc.GetAll)
-	r.GET("/applications/:name/releases/:version", rc.Get)
+	r.GET("/applications/:name/releases/:version", rc.GetByVersion)
 	r.POST("/applications/:name/releases", rc.Create)
-	r.PUT("/applications/:name/releases/:version", rc.Update)
-	r.DELETE("/applications/:name/releases/:version", rc.Delete)
+	r.PUT("/applications/:name/releases/:version", rc.UpdateByVersion)
+	r.DELETE("/applications/:name/releases/:version", rc.DeleteByVersion)
 
-	handler := cors.Default().Handler(r)
+	handler := cors.New(cors.Options{
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
+	}).Handler(r)
+	// handler := cors.Default().Handler(r)
 	log.Fatal(http.ListenAndServe(url, handler))
 }
 

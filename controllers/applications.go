@@ -49,7 +49,7 @@ func (ctrl ApplicationsController) GetAll(w http.ResponseWriter, r *http.Request
 }
 
 // Get retrieves an individual application resource
-func (ctrl ApplicationsController) Get(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (ctrl ApplicationsController) GetByName(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	applicationName := p.ByName("name")
 	applicationName = strings.ToLower(applicationName)
 
@@ -115,7 +115,7 @@ func (ctrl ApplicationsController) Create(w http.ResponseWriter, r *http.Request
 }
 
 // Update an individual application resource
-func (ctrl ApplicationsController) Update(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (ctrl ApplicationsController) UpdateByName(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	applicationName := p.ByName("name")
 	applicationName = strings.ToLower(applicationName)
 
@@ -150,7 +150,7 @@ func (ctrl ApplicationsController) Update(w http.ResponseWriter, r *http.Request
 }
 
 // Delete removes an existing application resource
-func (ctrl ApplicationsController) Delete(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (ctrl ApplicationsController) DeleteByName(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	applicationName := p.ByName("name")
 	applicationName = strings.ToLower(applicationName)
 

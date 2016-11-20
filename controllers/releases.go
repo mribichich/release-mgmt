@@ -61,7 +61,7 @@ func (ctrl ReleasesController) GetAll(w http.ResponseWriter, r *http.Request, p 
 }
 
 // Get retrieves an individual release resource
-func (ctrl ReleasesController) Get(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (ctrl ReleasesController) GetByVersion(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	applicationName := p.ByName("name")
 	releaseVersion := p.ByName("version")
 
@@ -147,7 +147,7 @@ func (ctrl ReleasesController) Create(w http.ResponseWriter, r *http.Request, p 
 }
 
 // Update a release resource
-func (ctrl ReleasesController) Update(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (ctrl ReleasesController) UpdateByVersion(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	applicationName := p.ByName("name")
 	releaseVersion := p.ByName("version")
 
@@ -213,7 +213,7 @@ func (ctrl ReleasesController) Update(w http.ResponseWriter, r *http.Request, p 
 }
 
 // Delete removes an existing release resource
-func (ctrl ReleasesController) Delete(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (ctrl ReleasesController) DeleteByVersion(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	applicationName := p.ByName("name")
 	releaseVersion := p.ByName("version")
 
